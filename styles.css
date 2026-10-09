@@ -140,3 +140,15 @@ nav.tabs svg{width:22px;height:22px}
 
 @media (min-width:700px){ .prono .match{font-size:30px} }
 .kpis .k .v{font-size:20px;white-space:nowrap}
+.h-day{font-size:16px;color:var(--muted);margin:14px 0 2px;letter-spacing:.06em}
+.h-day:first-child{margin-top:0}
+.hrow{display:flex;flex-direction:column;gap:6px;padding:12px 0;border-top:1px solid var(--soft)}
+.h-day + .hrow{border-top:0}
+.hrow .t{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.hrow .m{font-weight:600}
+.hrow .s{font-size:13px;color:var(--muted)}
+.hp{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.hp b{font-family:var(--display);font-size:18px;text-transform:uppercase}
+.hp span{font-size:14px;color:var(--text-2);font-weight:600;white-space:nowrap}
+.stamp{font-size:12px;color:var(--muted)}
+nav.tabs button{font-size:11px}

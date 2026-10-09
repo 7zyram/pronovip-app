@@ -55,7 +55,7 @@
   // ---------- État ----------
   const S = {
     session: null, profile: null, tab: "pronos", day: today(),
-    pronos: [], teasers: [], stats: null, bets: [], betsLoaded: false,
+    pronos: [], teasers: [], stats: null, bets: [], betsLoaded: false, history: [], historyLoaded: false,
     prefill: null, authMode: "login", authMsg: "", authErr: "", recovery: false,
     confirmDel: null, loading: false
   };
@@ -91,6 +91,17 @@
     } catch (e) { toast(errFr(e)); }
     S.loading = false; render();
   }
+  async function loadHistory() {
+    const [h, st] = await Promise.all([sb.rpc("pronos_history", { p_limit: 300 }), sb.rpc("pronos_stats")]);
+    if (h.error) { toast(errFr(h.error)); return; }
+    S.history = h.data || []; S.historyLoaded = true;
+    if (!st.error) S.stats = Array.isArray(st.data) ? st.data[0] : st.data;
+    render();
+  }
+  // Heure de début du match (heure du téléphone, l'appli vise la France)
+  const started = p => new Date(p.match_date + "T" + (p.kickoff || "23:59") + ":00") <= new Date();
+  const fmtStamp = s => new Date(s).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
   async function loadBets() {
     const { data, error } = await sb.from("bets").select("*").order("bet_date", { ascending: false }).order("id", { ascending: false }).limit(500);
     if (error) { toast(errFr(error)); return; }
@@ -105,6 +116,8 @@
     gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>',
     left: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>',
     right: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>',
+    lockSm: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>',
+    list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>',
     lock: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>'
   };
   const RG = '<div class="rg">18+ · Jouer comporte des risques : endettement, isolement, dépendance. Besoin d\'aide ? Appelle le <a href="tel:0974751313">09 74 75 13 13</a> (appel non surtaxé). Nos pronos sont des analyses, pas des garanties.</div>';
@@ -257,6 +270,32 @@
       ${RG}`;
   }
 
+  function viewHistorique() {
+    let list;
+    if (!S.historyLoaded) list = '<div class="empty">Chargement…</div>';
+    else if (!S.history.length) list = '<div class="card empty"><b>Historique vide</b>Les pronos apparaissent ici dès le coup d\'envoi, avec leur résultat.</div>';
+    else {
+      let last = "", out = "";
+      for (const p of S.history) {
+        const d = String(p.match_date);
+        if (d !== last) { out += `<h3 class="h-day">${esc(dayLabel(d))}</h3>`; last = d; }
+        out += `<div class="hrow">
+          <div class="t"><div><div class="m">${esc(p.match)}</div>
+            <div class="s">${esc(p.league)}${p.kickoff ? " · " + esc(p.kickoff) : ""} · ${p.is_free ? "Gratuit" : "VIP"} · ${esc(LEVELS[p.level] || p.level)}</div></div>
+            <span class="res res-${esc(p.result)}">${RES[p.result] || esc(p.result)}</span></div>
+          <div class="hp"><b>${esc(p.pick)}</b><span>cote ${fmtOdd(p.odd)}</span></div>
+          <div class="stamp">${ICON.lockSm} Publié le ${esc(fmtStamp(p.created_at))}, verrouillé au coup d'envoi</div>
+        </div>`;
+      }
+      list = `<section class="card">${out}</section>`;
+    }
+    return `${viewStatsBand()}
+      <div class="sec-h"><h2>Historique</h2></div>
+      <p class="note" style="font-size:15px">Tous nos pronos, gratuits et VIP, gagnés comme perdus. Chaque prono est publié avant le match et verrouillé au coup d'envoi : impossible de le modifier ou de le supprimer ensuite.</p>
+      ${list}
+      ${RG}`;
+  }
+
   function viewCompte() {
     const p = S.profile || {};
     const vipTxt = p.is_admin ? "Admin" : isVip() ? "VIP jusqu'au " + new Date(p.vip_until).toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) : "Gratuit";
@@ -288,7 +327,7 @@
         <h3 style="font-size:20px">Publier un prono</h3>
         <div class="row2">
           <label class="f">Date<input type="date" name="match_date" value="${esc(S.day)}" required></label>
-          <label class="f">Heure<input type="time" name="kickoff"></label>
+          <label class="f">Heure<input type="time" name="kickoff" required></label>
         </div>
         <label class="f">Championnat<input type="text" name="league" list="leagues" placeholder="Ligue 1" required maxlength="40"></label>
         <datalist id="leagues"><option>Ligue 1</option><option>Ligue 2</option><option>Premier League</option><option>Liga</option><option>Serie A</option><option>Bundesliga</option><option>Liga Portugal</option><option>Ligue des champions</option><option>Ligue Europa</option></datalist>
@@ -307,12 +346,13 @@
           <div class="daynav"><button data-act="day" data-v="-1" aria-label="Jour précédent">${ICON.left}</button><button data-act="day" data-v="1" aria-label="Jour suivant">${ICON.right}</button></div></div>
         ${S.pronos.length ? S.pronos.map(p => `<div class="bet">
           <div class="t"><div><div class="m">${esc(p.match)} ${p.is_free ? '<span class="free-tag" style="font-size:12px">Gratuit</span>' : ""}</div><div class="s">${esc(p.league)} · ${esc(p.pick)} · cote ${fmtOdd(p.odd)}</div></div><span class="res res-${esc(p.result)}">${RES[p.result]}</span></div>
-          <div class="acts">
+          ${started(p) ? `<div class="acts">
             <button class="g" data-act="pres" data-id="${p.id}" data-v="gagne" aria-pressed="${p.result === "gagne"}">Gagné</button>
             <button class="p" data-act="pres" data-id="${p.id}" data-v="perdu" aria-pressed="${p.result === "perdu"}">Perdu</button>
             <button class="r" data-act="pres" data-id="${p.id}" data-v="rembourse" aria-pressed="${p.result === "rembourse"}">Remboursé</button>
+          </div><p class="note">${ICON.lockSm} Verrouillé depuis le coup d'envoi. Résultat corrigeable pendant 24 h.</p>` : `<div class="acts"><span class="note">Résultat à mettre après le coup d'envoi.</span>
             ${S.confirmDel === "p" + p.id ? `<button class="del" data-act="pdel" data-id="${p.id}">Confirmer ?</button>` : `<button class="del" data-act="askdel" data-v="p${p.id}">Supprimer</button>`}
-          </div></div>`).join("") : '<p class="note">Aucun prono ce jour-là.</p>'}
+          </div>`}</div>`).join("") : '<p class="note">Aucun prono ce jour-là.</p>'}
       </section>
       <form class="card form" data-form="vip">
         <h3 style="font-size:20px">Activer un VIP</h3>
@@ -324,9 +364,9 @@
   }
 
   function viewShell() {
-    const tabs = [["pronos", "Pronos", ICON.ball], ["suivi", "Mon suivi", ICON.chart], ["compte", "Compte", ICON.user]];
+    const tabs = [["pronos", "Pronos", ICON.ball], ["historique", "Historique", ICON.list], ["suivi", "Mon suivi", ICON.chart], ["compte", "Compte", ICON.user]];
     if (isAdmin()) tabs.push(["admin", "Admin", ICON.gear]);
-    const body = S.tab === "suivi" ? viewSuivi() : S.tab === "compte" ? viewCompte() : S.tab === "admin" ? viewAdmin() : viewPronos();
+    const body = S.tab === "historique" ? viewHistorique() : S.tab === "suivi" ? viewSuivi() : S.tab === "compte" ? viewCompte() : S.tab === "admin" ? viewAdmin() : viewPronos();
     return `<header class="top"><div class="top-in"><img src="icons/icon-192.png" alt=""><div class="brand">Prono<span>VIP</span></div>
       <span class="pill ${isVip() ? "pill-vip" : "pill-free"}">${isAdmin() ? "Admin" : isVip() ? "VIP" : "Gratuit"}</span></div></header>
       <main id="main">${body}</main>
@@ -343,6 +383,7 @@
   async function setTab(t) {
     S.tab = t; S.confirmDel = null; window.scrollTo(0, 0); render();
     if (t === "suivi" && !S.betsLoaded) loadBets();
+    if (t === "historique") loadHistory();
   }
 
   app.addEventListener("click", async e => {
@@ -444,6 +485,7 @@
         if (!(odd >= 1)) return toast("La cote doit être un nombre, par exemple 1,50.");
         const row = { match_date: val("match_date") || S.day, kickoff: val("kickoff") || null, league: val("league"), match: val("match"), pick: val("pick"), odd, level: val("level") || "equilibre", is_free: !!fd.get("is_free"), analysis: val("analysis") || null };
         if (!row.league || !row.match || !row.pick) return toast("Remplis le championnat, le match et le prono.");
+        if (!row.kickoff) return toast("Mets l'heure du match : le prono se verrouille au coup d'envoi.");
         const { error } = await sb.from("pronos").insert(row);
         if (error) throw error;
         f.reset(); toast("Prono publié !");
