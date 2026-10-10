@@ -148,7 +148,7 @@
         <button class="btn btn-main" type="submit">${signup ? "Créer mon compte" : "Se connecter"}</button>
         ${signup ? "" : `<button class="btn btn-ghost btn-sm" type="button" data-act="forgot">Mot de passe oublié ?</button>`}
       </form>
-      <p class="note" style="color:#fff;opacity:.85;margin-top:14px;text-align:center;max-width:400px">18+ · Jouer comporte des risques : endettement, isolement, dépendance. 09 74 75 13 13.</p>
+      <p class="note" style="color:#fff;opacity:.85;margin-top:14px;text-align:center;max-width:400px">18+ · Jouer comporte des risques : endettement, isolement, dépendance. 09 74 75 13 13.<br><a style="color:#fff" href="cgv.html" target="_blank">CGV</a> · <a style="color:#fff" href="confidentialite.html" target="_blank">Confidentialité</a> · <a style="color:#fff" href="mentions-legales.html" target="_blank">Mentions légales</a> · <a style="color:#fff" href="jeu-responsable.html" target="_blank">Jeu responsable</a></p>
     </div>`;
   }
 
@@ -309,6 +309,7 @@
         <div class="sec-h"><div><div class="note">Connecté avec</div><b style="word-break:break-all">${esc(p.email || (S.session && S.session.user.email) || "")}</b></div><span class="pill ${isVip() ? "pill-vip" : ""}" style="${isVip() ? "" : "background:var(--soft)"}">${esc(vipTxt)}</span></div>
         ${!isVip() ? `<button class="btn btn-gold" data-act="vip">Devenir VIP · ${esc(C.VIP_PRICE)}</button><p class="note">Après ton achat, ton accès VIP est activé sur ce compte. Utilise la même adresse e-mail.</p>` : ""}
       </section>
+      ${C.STRIPE_PORTAL && !p.is_admin ? `<section class="card form"><h3 style="font-size:20px">Mon abonnement</h3><p class="note" style="font-size:15px">Factures, carte bancaire, résiliation : tout se gère ici.</p><a class="btn btn-ghost" href="${esc(C.STRIPE_PORTAL + "?prefilled_email=" + encodeURIComponent(p.email || ""))}" target="_blank" rel="noopener">Gérer mon abonnement</a></section>` : ""}
       <form class="card form" data-form="budget">
         <h3 style="font-size:20px">Mon budget par mois</h3>
         <p class="note" style="font-size:15px">Fixe la somme maximum que tu t'autorises à miser par mois. On te prévient à 80 %.</p>
@@ -318,7 +319,8 @@
       ${install}
       <button class="btn btn-ghost" data-act="logout">Se déconnecter</button>
       ${RG}
-      <p class="note" style="text-align:center">Aide et infos : <a href="https://www.joueurs-info-service.fr" target="_blank" rel="noopener">joueurs-info-service.fr</a></p>`;
+      <p class="note" style="text-align:center">Aide et infos : <a href="https://www.joueurs-info-service.fr" target="_blank" rel="noopener">joueurs-info-service.fr</a></p>
+      <p class="note" style="text-align:center"><a href="cgv.html" target="_blank">CGV</a> · <a href="confidentialite.html" target="_blank">Confidentialité</a> · <a href="mentions-legales.html" target="_blank">Mentions légales</a> · <a href="jeu-responsable.html" target="_blank">Jeu responsable</a></p>`;
   }
 
   function viewAdmin() {
@@ -366,23 +368,38 @@
   function viewVipModal() {
     if (!S.vipModal) return "";
     const email = (S.profile && S.profile.email) || (S.session && S.session.user.email) || "";
-    const ready = !!C.PAYPAL_URL;
-    const payUrl = ready ? C.PAYPAL_URL.replace(/\/+$/, "") + "/" + C.VIP_AMOUNT + "EUR" : "#";
-    return `<div class="modal" data-act="vipclose" role="dialog" aria-modal="true" aria-labelledby="vipt">
-      <div class="sheet" data-stop="1">
-        <button class="x" data-act="vipclose" aria-label="Fermer">×</button>
-        <h2 id="vipt" style="font-size:30px">Pass VIP <span style="color:var(--amber)">· ${esc(C.VIP_PRICE)}</span></h2>
-        <p class="note" style="font-size:15px">30 jours d'accès à tous les pronos du jour + le canal Telegram privé. Sans renouvellement automatique, rien à résilier.</p>
+    const uid = S.session ? S.session.user.id : "";
+    const dis = S.vipOk ? "" : 'aria-disabled="true" tabindex="-1"';
+    const consent = `<label class="check"><input type="checkbox" data-act="vipok" ${S.vipOk ? "checked" : ""}><span>J'ai 18 ans ou plus, j'accepte les <a href="cgv.html" target="_blank">CGV</a>. Je demande l'accès immédiat au contenu et je renonce à mon droit de rétractation de 14 jours.</span></label>`;
+    let body;
+    if (C.STRIPE_LINK) {
+      const url = C.STRIPE_LINK + "?client_reference_id=" + encodeURIComponent(uid) + "&prefilled_email=" + encodeURIComponent(email);
+      body = `<p class="note" style="font-size:15px">Tous les pronos du jour avec leur analyse, l'historique complet et le canal Telegram privé. <b>${esc(C.VIP_PRICE)} par mois, sans engagement</b> : tu résilies quand tu veux depuis ton compte.</p>
+        <ol class="steps">
+          <li><b>Paie en toute sécurité</b> par carte bancaire ou Apple Pay.</li>
+          <li><b>Ton accès VIP s'active tout seul</b> en quelques secondes. Reviens dans l'appli : le badge VIP apparaît en haut.</li>
+        </ol>
+        ${consent}
+        <a class="btn btn-gold paybtn" data-act="pay" href="${esc(url)}" target="_blank" rel="noopener" ${dis}>S'abonner · ${esc(C.VIP_PRICE)}/mois</a>
+        <p class="note">Paiement sécurisé par Stripe. 18+ · Jouer comporte des risques : 09 74 75 13 13.</p>`;
+    } else if (C.PAYPAL_URL) {
+      const payUrl = C.PAYPAL_URL.replace(/\/+$/, "") + "/" + C.VIP_AMOUNT + "EUR";
+      body = `<p class="note" style="font-size:15px">30 jours d'accès à tous les pronos du jour + le canal Telegram privé. Sans renouvellement automatique, rien à résilier.</p>
         <ol class="steps">
           <li><b>Copie ton e-mail PronoVIP</b> : on s'en sert pour activer ton accès.
             <div class="mailbox"><span>${esc(email)}</span><button class="btn btn-ghost btn-sm" data-act="copymail" data-v="${esc(email)}">Copier</button></div></li>
           <li><b>Paie avec PayPal</b> (carte bancaire ou compte PayPal) et <b>colle ton e-mail dans la note</b> du paiement.</li>
           <li><b>Ton accès VIP est activé sous 24 h</b> (en général bien plus vite). Le badge VIP apparaît en haut de l'appli.</li>
         </ol>
-        <label class="check"><input type="checkbox" data-act="vipok" ${S.vipOk ? "checked" : ""}><span>J'ai 18 ans ou plus. Je demande l'accès immédiat au contenu et je renonce à mon droit de rétractation de 14 jours.</span></label>
-        ${ready ? `<a class="btn btn-gold" id="paybtn" data-act="pay" href="${esc(payUrl)}" target="_blank" rel="noopener" ${S.vipOk ? "" : 'aria-disabled="true" tabindex="-1"'}>Payer ${esc(C.VIP_PRICE)} avec PayPal</a>`
-                : `<p class="err">Le paiement arrive très bientôt.</p>`}
-        <p class="note">Paiement sécurisé par PayPal. 18+ · Jouer comporte des risques : 09 74 75 13 13.</p>
+        ${consent}
+        <a class="btn btn-gold paybtn" data-act="pay" href="${esc(payUrl)}" target="_blank" rel="noopener" ${dis}>Payer ${esc(C.VIP_PRICE)} avec PayPal</a>
+        <p class="note">Paiement sécurisé par PayPal. 18+ · Jouer comporte des risques : 09 74 75 13 13.</p>`;
+    } else body = `<p class="err">Le paiement arrive très bientôt.</p>`;
+    return `<div class="modal" data-act="vipclose" role="dialog" aria-modal="true" aria-labelledby="vipt">
+      <div class="sheet" data-stop="1">
+        <button class="x" data-act="vipclose" aria-label="Fermer">×</button>
+        <h2 id="vipt" style="font-size:30px">Pass VIP <span style="color:var(--amber)">· ${esc(C.VIP_PRICE)}${C.STRIPE_LINK ? "/mois" : ""}</span></h2>
+        ${body}
       </div></div>`;
   }
 
@@ -426,7 +443,7 @@
       else if (act === "pay") { if (!S.vipOk) { e.preventDefault(); toast("Coche la case pour continuer."); } return; }
       else if (act === "vip") { S.vipModal = true; S.vipOk = false; render(); }
       else if (act === "vipclose") { if (e.target.closest("[data-stop]") && !e.target.closest(".x")) return; S.vipModal = false; render(); }
-      else if (act === "vipok") { S.vipOk = b.checked; const pb = document.getElementById("paybtn"); if (pb) { if (S.vipOk) { pb.removeAttribute("aria-disabled"); pb.removeAttribute("tabindex"); } else { pb.setAttribute("aria-disabled", "true"); pb.setAttribute("tabindex", "-1"); } } return; }
+      else if (act === "vipok") { S.vipOk = b.checked; document.querySelectorAll(".paybtn").forEach(pb => { if (S.vipOk) { pb.removeAttribute("aria-disabled"); pb.removeAttribute("tabindex"); } else { pb.setAttribute("aria-disabled", "true"); pb.setAttribute("tabindex", "-1"); } }); return; }
       else if (act === "copymail") { try { await navigator.clipboard.writeText(v); toast("E-mail copié !"); } catch (_) { toast("Copie impossible : recopie-le à la main."); } }
       else if (act === "tab") setTab(v);
       else if (act === "day") { S.day = addDays(S.day, Number(v)); loadDay(); }
@@ -542,6 +559,14 @@
       if (S.tab === "suivi") loadBets();
     } catch (e) { toast(errFr(e)); render(); }
   }
+
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState !== "visible" || !S.session || !S.profile) return;
+    const was = isVip();
+    try { await loadProfile(); } catch (_) { return; }
+    if (!was && isVip()) { S.vipModal = false; render(); toast("Bienvenue chez les VIP ! Tous les pronos sont débloqués."); loadDay(); }
+    else render();
+  });
 
   document.addEventListener("keydown", e => { if (e.key === "Escape" && S.vipModal) { S.vipModal = false; render(); } });
 

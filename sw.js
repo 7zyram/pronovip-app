@@ -1,5 +1,5 @@
 // Service worker minimal : rend l'appli installable et garde l'interface en cache.
-const CACHE = "pronovip-v2";
+const CACHE = "pronovip-v3";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "config.js", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon.png"];
 
