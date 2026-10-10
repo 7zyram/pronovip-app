@@ -57,7 +57,7 @@
     session: null, profile: null, tab: "pronos", day: today(),
     pronos: [], teasers: [], stats: null, bets: [], betsLoaded: false, history: [], historyLoaded: false,
     prefill: null, authMode: "login", authMsg: "", authErr: "", recovery: false,
-    confirmDel: null, loading: false
+    confirmDel: null, loading: false, vipModal: false, vipOk: false
   };
   let installEvt = null;
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; if (S.tab === "compte") render(); });
@@ -192,7 +192,7 @@
       <div class="body">
         <div class="blur" aria-hidden="true"><div class="pick"><div><div class="lbl">Notre prono</div><div class="p">Prono réservé VIP</div></div><div class="odd"><b>1,00</b><small>cote</small></div></div>
           <p class="analysis">L'analyse complète de ce match est réservée aux membres VIP de PronoVIP.</p></div>
-        <div class="lock-over">${ICON.lock}<b>Réservé aux VIP</b><a class="btn btn-gold btn-sm" href="${esc(C.VIP_URL)}" target="_blank" rel="noopener">Devenir VIP · ${esc(C.VIP_PRICE)}</a></div>
+        <div class="lock-over">${ICON.lock}<b>Réservé aux VIP</b><button class="btn btn-gold btn-sm" data-act="vip">Devenir VIP · ${esc(C.VIP_PRICE)}</button></div>
       </div>
     </article>`;
   }
@@ -209,7 +209,7 @@
         <div class="daynav"><button data-act="day" data-v="-1" aria-label="Jour précédent">${ICON.left}</button><span>${esc(dayLabel(S.day))}</span><button data-act="day" data-v="1" aria-label="Jour suivant">${ICON.right}</button></div>
       </div>
       ${list}
-      ${!isVip() ? `<div class="card" style="display:flex;flex-direction:column;gap:10px;align-items:flex-start"><h3 style="font-size:20px">Tous les pronos du jour</h3><p class="note" style="font-size:15px">Avec le Pass VIP, tu débloques tous les matchs analysés et le canal Telegram privé. 30 jours, sans engagement.</p><a class="btn btn-gold" href="${esc(C.VIP_URL)}" target="_blank" rel="noopener">Devenir VIP · ${esc(C.VIP_PRICE)}</a></div>` : ""}
+      ${!isVip() ? `<div class="card" style="display:flex;flex-direction:column;gap:10px;align-items:flex-start"><h3 style="font-size:20px">Tous les pronos du jour</h3><p class="note" style="font-size:15px">Avec le Pass VIP, tu débloques tous les matchs analysés et le canal Telegram privé. 30 jours, sans engagement.</p><button class="btn btn-gold" data-act="vip">Devenir VIP · ${esc(C.VIP_PRICE)}</button></div>` : ""}
       ${RG}`;
   }
 
@@ -307,7 +307,7 @@
     return `<div class="sec-h"><h2>Mon compte</h2></div>
       <section class="card form">
         <div class="sec-h"><div><div class="note">Connecté avec</div><b style="word-break:break-all">${esc(p.email || (S.session && S.session.user.email) || "")}</b></div><span class="pill ${isVip() ? "pill-vip" : ""}" style="${isVip() ? "" : "background:var(--soft)"}">${esc(vipTxt)}</span></div>
-        ${!isVip() ? `<a class="btn btn-gold" href="${esc(C.VIP_URL)}" target="_blank" rel="noopener">Devenir VIP · ${esc(C.VIP_PRICE)}</a><p class="note">Après ton achat, ton accès VIP est activé sur ce compte. Utilise la même adresse e-mail.</p>` : ""}
+        ${!isVip() ? `<button class="btn btn-gold" data-act="vip">Devenir VIP · ${esc(C.VIP_PRICE)}</button><p class="note">Après ton achat, ton accès VIP est activé sur ce compte. Utilise la même adresse e-mail.</p>` : ""}
       </section>
       <form class="card form" data-form="budget">
         <h3 style="font-size:20px">Mon budget par mois</h3>
@@ -363,6 +363,29 @@
       </form>`;
   }
 
+  function viewVipModal() {
+    if (!S.vipModal) return "";
+    const email = (S.profile && S.profile.email) || (S.session && S.session.user.email) || "";
+    const ready = !!C.PAYPAL_URL;
+    const payUrl = ready ? C.PAYPAL_URL.replace(/\/+$/, "") + "/" + C.VIP_AMOUNT + "EUR" : "#";
+    return `<div class="modal" data-act="vipclose" role="dialog" aria-modal="true" aria-labelledby="vipt">
+      <div class="sheet" data-stop="1">
+        <button class="x" data-act="vipclose" aria-label="Fermer">×</button>
+        <h2 id="vipt" style="font-size:30px">Pass VIP <span style="color:var(--amber)">· ${esc(C.VIP_PRICE)}</span></h2>
+        <p class="note" style="font-size:15px">30 jours d'accès à tous les pronos du jour + le canal Telegram privé. Sans renouvellement automatique, rien à résilier.</p>
+        <ol class="steps">
+          <li><b>Copie ton e-mail PronoVIP</b> : on s'en sert pour activer ton accès.
+            <div class="mailbox"><span>${esc(email)}</span><button class="btn btn-ghost btn-sm" data-act="copymail" data-v="${esc(email)}">Copier</button></div></li>
+          <li><b>Paie avec PayPal</b> (carte bancaire ou compte PayPal) et <b>colle ton e-mail dans la note</b> du paiement.</li>
+          <li><b>Ton accès VIP est activé sous 24 h</b> (en général bien plus vite). Le badge VIP apparaît en haut de l'appli.</li>
+        </ol>
+        <label class="check"><input type="checkbox" data-act="vipok" ${S.vipOk ? "checked" : ""}><span>J'ai 18 ans ou plus. Je demande l'accès immédiat au contenu et je renonce à mon droit de rétractation de 14 jours.</span></label>
+        ${ready ? `<a class="btn btn-gold" id="paybtn" data-act="pay" href="${esc(payUrl)}" target="_blank" rel="noopener" ${S.vipOk ? "" : 'aria-disabled="true" tabindex="-1"'}>Payer ${esc(C.VIP_PRICE)} avec PayPal</a>`
+                : `<p class="err">Le paiement arrive très bientôt.</p>`}
+        <p class="note">Paiement sécurisé par PayPal. 18+ · Jouer comporte des risques : 09 74 75 13 13.</p>
+      </div></div>`;
+  }
+
   function viewShell() {
     const tabs = [["pronos", "Pronos", ICON.ball], ["historique", "Historique", ICON.list], ["suivi", "Mon suivi", ICON.chart], ["compte", "Compte", ICON.user]];
     if (isAdmin()) tabs.push(["admin", "Admin", ICON.gear]);
@@ -370,7 +393,7 @@
     return `<header class="top"><div class="top-in"><img src="icons/icon-192.png" alt=""><div class="brand">Prono<span>VIP</span></div>
       <span class="pill ${isVip() ? "pill-vip" : "pill-free"}">${isAdmin() ? "Admin" : isVip() ? "VIP" : "Gratuit"}</span></div></header>
       <main id="main">${body}</main>
-      <nav class="tabs" aria-label="Navigation"><div class="in">${tabs.map(([id, l, ic]) => `<button data-act="tab" data-v="${id}" ${S.tab === id ? 'aria-current="page"' : ""}>${ic}${l}</button>`).join("")}</div></nav>`;
+      ${viewVipModal()}<nav class="tabs" aria-label="Navigation"><div class="in">${tabs.map(([id, l, ic]) => `<button data-act="tab" data-v="${id}" ${S.tab === id ? 'aria-current="page"' : ""}>${ic}${l}</button>`).join("")}</div></nav>`;
   }
 
   function render() {
@@ -400,6 +423,11 @@
         if (error) throw error;
         S.authErr = ""; S.authMsg = "Si un compte existe, un e-mail pour changer ton mot de passe vient de partir."; render();
       }
+      else if (act === "pay") { if (!S.vipOk) { e.preventDefault(); toast("Coche la case pour continuer."); } return; }
+      else if (act === "vip") { S.vipModal = true; S.vipOk = false; render(); }
+      else if (act === "vipclose") { if (e.target.closest("[data-stop]") && !e.target.closest(".x")) return; S.vipModal = false; render(); }
+      else if (act === "vipok") { S.vipOk = b.checked; const pb = document.getElementById("paybtn"); if (pb) { if (S.vipOk) { pb.removeAttribute("aria-disabled"); pb.removeAttribute("tabindex"); } else { pb.setAttribute("aria-disabled", "true"); pb.setAttribute("tabindex", "-1"); } } return; }
+      else if (act === "copymail") { try { await navigator.clipboard.writeText(v); toast("E-mail copié !"); } catch (_) { toast("Copie impossible : recopie-le à la main."); } }
       else if (act === "tab") setTab(v);
       else if (act === "day") { S.day = addDays(S.day, Number(v)); loadDay(); }
       else if (act === "track") {
@@ -514,6 +542,8 @@
       if (S.tab === "suivi") loadBets();
     } catch (e) { toast(errFr(e)); render(); }
   }
+
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && S.vipModal) { S.vipModal = false; render(); } });
 
   sb.auth.onAuthStateChange((event, session) => {
     if (event === "PASSWORD_RECOVERY") { S.session = session; S.recovery = true; render(); return; }
