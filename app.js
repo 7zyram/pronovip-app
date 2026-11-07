@@ -37,7 +37,10 @@
   let toastT;
   function toast(msg) {
     toastEl.textContent = msg; toastEl.hidden = false;
-    clearTimeout(toastT); toastT = setTimeout(() => { toastEl.hidden = true; }, 2800);
+    requestAnimationFrame(() => toastEl.classList.add("show"));
+    clearTimeout(toastT); toastT = setTimeout(() => {
+      toastEl.classList.remove("show"); toastT = setTimeout(() => { toastEl.hidden = true; }, 260);
+    }, 2800);
   }
   function errFr(e) {
     const m = (e && (e.message || e.error_description)) || String(e || "");
@@ -144,7 +147,7 @@
         <label class="f">Mot de passe<input type="password" name="password" autocomplete="${signup ? "new-password" : "current-password"}" minlength="6" required></label>
         ${signup ? `<label class="check"><input type="checkbox" name="age" required><span>J'ai 18 ans ou plus et je sais que les paris comportent des risques.</span></label>` : ""}
         ${S.authErr ? `<p class="err">${esc(S.authErr)}</p>` : ""}
-        ${S.authMsg ? `<p class="note" style="color:var(--grass-d);font-weight:600">${esc(S.authMsg)}</p>` : ""}
+        ${S.authMsg ? `<p class="note" style="color:var(--up);font-weight:600">${esc(S.authMsg)}</p>` : ""}
         <button class="btn btn-main" type="submit">${signup ? "Créer mon compte" : "Se connecter"}</button>
         ${signup ? "" : `<button class="btn btn-ghost btn-sm" type="button" data-act="forgot">Mot de passe oublié ?</button>`}
       </form>
@@ -235,13 +238,13 @@
       <section class="card" style="display:flex;flex-direction:column;gap:8px">
         <div class="sec-h"><h3 style="font-size:20px">Mon budget du mois</h3><b>${s.month.toFixed(2).replace(".", ",")} / ${budget.toFixed(2).replace(".", ",")} €</b></div>
         <div class="bar ${ratio >= 1 ? "over" : ratio >= .8 ? "warn" : ""}"><div style="width:${Math.min(100, Math.round(ratio * 100))}%"></div></div>
-        ${ratio >= 1 ? '<div class="alert">Budget du mois atteint. On s\'arrête là pour ce mois-ci.</div>' : ratio >= .8 ? '<div class="alert" style="background:#FFF3CC;color:#7A5A00">Attention : tu as utilisé plus de 80 % de ton budget du mois.</div>' : ""}
+        ${ratio >= 1 ? '<div class="alert">Budget du mois atteint. On s\'arrête là pour ce mois-ci.</div>' : ratio >= .8 ? '<div class="alert warn">Attention : tu as utilisé plus de 80 % de ton budget du mois.</div>' : ""}
       </section>` : `<section class="card" style="display:flex;justify-content:space-between;align-items:center;gap:10px"><p class="note" style="font-size:15px">Fixe un budget par mois : l'appli te prévient à 80 %.</p><button class="btn btn-ghost btn-sm" data-act="tab" data-v="compte">Fixer</button></section>`;
     const list = S.bets.length ? S.bets.map(b => {
       const gain = b.result === "gagne" ? Number(b.stake) * (Number(b.odd) - 1) : b.result === "perdu" ? -Number(b.stake) : 0;
       return `<div class="bet">
         <div class="t"><div><div class="m">${esc(b.match)}</div><div class="s">${esc(b.pick)} · cote ${fmtOdd(b.odd)} · mise ${Number(b.stake).toFixed(2).replace(".", ",")} €</div><div class="s">${esc(dayLabel(String(b.bet_date)))}</div></div>
-          ${b.result === "attente" ? '<span class="res res-attente">En attente</span>' : `<b class="${gain >= 0 ? "pos" : "neg"}" style="color:${gain > 0 ? "var(--grass)" : gain < 0 ? "var(--red)" : "var(--muted)"}">${fmtEur(gain)}</b>`}</div>
+          ${b.result === "attente" ? '<span class="res res-attente">En attente</span>' : `<b class="${gain >= 0 ? "pos" : "neg"}" style="color:${gain > 0 ? "var(--up)" : gain < 0 ? "var(--down)" : "var(--muted)"}">${fmtEur(gain)}</b>`}</div>
         <div class="acts">
           <button class="g" data-act="bres" data-id="${b.id}" data-v="gagne" aria-pressed="${b.result === "gagne"}">Gagné</button>
           <button class="p" data-act="bres" data-id="${b.id}" data-v="perdu" aria-pressed="${b.result === "perdu"}">Perdu</button>
@@ -417,6 +420,47 @@
     const y = window.scrollY;
     app.innerHTML = S.session && !S.recovery ? viewShell() : viewAuth();
     window.scrollTo(0, y);
+    animate();
+  }
+
+  // ---------- Animations ----------
+  // On anime seulement quand le contenu change vraiment (onglet, jour, données reçues),
+  // pas à chaque clic : sinon tout « clignoterait » à chaque re-rendu.
+  const calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let lastKey = "", lastTab = "", lastModal = false;
+  function animate() {
+    const main = document.getElementById("main");
+    const key = !main ? "auth|" + S.authMode
+      : [S.tab, S.day, S.loading ? "L" : "", S.pronos.map(p => p.id).join(","), (S.teasers || []).length,
+         S.betsLoaded ? "B" : "", (S.history || []).length].join("|");
+    const modalOpened = S.vipModal && !lastModal; lastModal = S.vipModal;
+    const changed = key !== lastKey; lastKey = key;
+    if (calm) return;
+    if (modalOpened) { const m = app.querySelector(".modal"); if (m) m.classList.add("modal-in"); }
+    if (!changed) return;
+    if (!main) { const a = app.querySelector(".auth"); if (a) a.classList.add("enter"); return; }
+    if (S.tab !== lastTab) {
+      const t = app.querySelector('nav.tabs button[aria-current="page"]'); if (t) t.classList.add("pop");
+      lastTab = S.tab;
+    }
+    [...main.children].forEach((el, i) => el.style.setProperty("--i", Math.min(i, 8)));
+    main.classList.add("enter");
+    main.querySelectorAll(".stats-band .v, .kpis .v").forEach(countUp);
+  }
+  function countUp(el) {
+    const txt = el.textContent, m = txt.match(/\d+(?:[.,]\d+)?/);
+    if (!m) return;
+    const end = Number(m[0].replace(",", ".")), dec = (m[0].split(/[.,]/)[1] || "").length;
+    if (!(end > 0)) return;
+    const t0 = performance.now(), dur = 900;
+    const step = now => {
+      if (!el.isConnected) return;
+      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+      const v = (end * e).toFixed(dec).replace(".", m[0].includes(",") ? "," : ".");
+      el.textContent = txt.slice(0, m.index) + v + txt.slice(m.index + m[0].length);
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
   }
 
   // ---------- Actions ----------

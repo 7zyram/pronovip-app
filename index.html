@@ -20,11 +20,21 @@
 </head>
 <body>
 <div id="app" aria-live="polite">
-  <div class="splash"><img src="icons/icon-192.png" alt="" width="72" height="72"><p>Chargement…</p></div>
+  <div class="splash"><img src="icons/icon-192.png" alt="" width="72" height="72"><div class="ld"><i></i></div><p>Chargement…</p></div>
 </div>
 <div id="toast" role="status" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script>
+// Si le chargement dure trop (serveur endormi, réseau lent), on le dit et on propose de recharger.
+setTimeout(function () {
+  var s = document.querySelector("#app .splash");
+  if (!s || s.querySelector("button")) return;
+  var p = s.querySelector("p"); if (p) p.textContent = "Le serveur se réveille, ça peut prendre quelques secondes…";
+  var b = document.createElement("button"); b.className = "btn btn-gold btn-sm"; b.textContent = "Recharger";
+  b.onclick = function () { location.reload(); }; s.appendChild(b);
+}, 10000);
+</script>
 </body>
 </html>
